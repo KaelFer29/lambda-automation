@@ -1,0 +1,14 @@
+# Terraform / OpenTofu
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+tofu.tar.gz
+
+# Build artifacts
+infra/build/
+
+# Python
+__pycache__/
+*.pyc

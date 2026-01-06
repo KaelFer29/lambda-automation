@@ -1,0 +1,56 @@
+name: CI/CD Lambda
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_INPUT: "false"
+
+jobs:
+  deploy:
+    name: Plan/Apply Lambda
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v1
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-session-name: gha-opentofu
+
+      - name: Init
+        working-directory: infra
+        run: tofu init
+
+      - name: Validate
+        working-directory: infra
+        run: tofu validate
+
+      - name: Plan
+        if: github.event_name == 'pull_request'
+        working-directory: infra
+        run: tofu plan -no-color
+
+      - name: Plan (save)
+        if: github.event_name == 'push'
+        working-directory: infra
+        run: tofu plan -out plan.out -no-color
+
+      - name: Apply to main
+        if: github.event_name == 'push'
+        working-directory: infra
+        run: tofu apply -auto-approve plan.out
