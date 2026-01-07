@@ -6,47 +6,28 @@ Sistema de despliegue continuo (CI/CD) para funciones Lambda en AWS. Al realizar
 
 Se implementa un flujo de trabajo automatizado donde el código de la Lambda y su infraestructura se versionan en Git. Los cambios se validan mediante `tofu plan` en cada Pull Request y se despliegan automáticamente al mergear a `main`. Se utiliza autenticación OIDC para obtener credenciales temporales, evitando guardar secretos permanentes en GitHub.
 
-## Estructura del proyecto
-
-```
-lambda-automation/
-├── infra/                   # Infraestructura con OpenTofu
-│   ├── main.tf              # Lambda, roles IAM, empaquetado
-│   ├── variables.tf         # Variables (región, nombre función)
-│   └── outputs.tf           # Outputs (ARN, nombre Lambda)
-├── src/hello/
-│   └── handler.py           # Código Python de la Lambda
-├── bootstrap/               # Configuración inicial (OIDC)
-│   ├── main.tf
-│   ├── variables.tf
-│   └── README.md
-├── .github/workflows/
-│   └── deploy.yml           # Pipeline CI/CD
-├── .gitignore
-└── README.md
-```
 
 ## Componentes principales
 
-### infra/main.tf
+### 1. infra/main.tf
 Define la infraestructura mediante OpenTofu. Incluye:
 - `archive_file`: Empaqueta el código en un `.zip`.
 - `aws_iam_role`: Rol de ejecución para la Lambda con permisos básicos.
 - `aws_lambda_function`: Función Lambda con Python 3.12, timeout de 10 segundos.
 
-El estado de Terraform se guarda localmente en el runner de GitHub Actions, configuración apropiada para un solo desarrollador sin costos adicionales. Para equipos más grandes, se recomienda migrar a un backend remoto (S3 + DynamoDB).
+El estado de Terraform se guarda localmente en el runner de GitHub Actions, configuración apropiada para un solo desarrollador sin costos adicionales. Para equipos más grandes, se recomienda migrar a un backend remoto (S3 + DynamoDB). En este caso, fue realizado por razones que se explicarán en uno de los apartados siguientes.
 
-### src/hello/handler.py
+### 2. src/hello/handler.py
 Código Python ejecutable en la Lambda. Se modifica según los requerimientos funcionales.
 
-### .github/workflows/deploy.yml
+### 3. .github/workflows/deploy.yml
 Pipeline automatizado que:
 - En Pull Request: Valida cambios con `tofu plan` sin aplicarlos.
 - En push a `main`: Ejecuta `tofu init`, `tofu plan` y `tofu apply`.
 
 Se autentica mediante OIDC para obtener credenciales temporales de AWS.
 
-### bootstrap/
+### 4. bootstrap/
 Módulo de inicialización que crea:
 - Proveedor OIDC: Autoriza a AWS para confiar en tokens de GitHub Actions.
 - Rol IAM: Permite a GitHub Actions interactuar con AWS.
