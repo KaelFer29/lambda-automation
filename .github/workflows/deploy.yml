@@ -40,6 +40,18 @@ jobs:
         working-directory: infra
         run: tofu validate
 
+      - name: Import existing IAM role (idempotent)
+        working-directory: infra
+        run: |
+          # Importa el rol si ya existe para evitar conflicto de estado local
+          tofu import aws_iam_role.lambda_exec hello-lambda-exec || true
+
+      - name: Import existing Lambda (optional)
+        working-directory: infra
+        run: |
+          # Importa la Lambda si ya existe; ignora si no está creada aún
+          tofu import aws_lambda_function.this hello-lambda || true
+
       - name: Plan
         if: github.event_name == 'pull_request'
         working-directory: infra
