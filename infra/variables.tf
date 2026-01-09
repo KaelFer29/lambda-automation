@@ -21,3 +21,9 @@ variable "vitacura_dte_pass" {
   type        = string
   default     = ""
 }
+
+variable "image_tag" {
+  description = "Etiqueta de la imagen de contenedor a desplegar (ej: commit SHA)"
+  type        = string
+  default     = ""
+}

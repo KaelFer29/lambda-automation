@@ -1,4 +1,4 @@
-name: CI/CD Lambda
+name: CI/CD Lambda (Container)
 
 on:
   push:
@@ -15,7 +15,7 @@ env:
 
 jobs:
   deploy:
-    name: Plan/Apply Lambda
+    name: Build Image + Plan/Apply Lambda
     runs-on: ubuntu-latest
 
     steps:
@@ -32,37 +32,52 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
           role-session-name: gha-opentofu
 
-      - name: Init
-        working-directory: infra
-        run: tofu init
-
-      - name: Validate
-        working-directory: infra
-        run: tofu validate
-
-      - name: Import existing IAM role (idempotent)
+      - name: Init & Validate
         working-directory: infra
         run: |
-          # Importa el rol si ya existe para evitar conflicto de estado local
-          tofu import aws_iam_role.lambda_exec hello-lambda-exec || true
+          tofu init
+          tofu validate
 
-      - name: Import existing Lambda (optional)
+      - name: Apply base infra (ECR)
+        if: github.event_name == push
         working-directory: infra
         run: |
-          # Importa la Lambda si ya existe; ignora si no está creada aún
-          tofu import aws_lambda_function.this hello-lambda || true
+          tofu apply -auto-approve -no-color
 
-      - name: Plan
-        if: github.event_name == 'pull_request'
-        working-directory: infra
-        run: tofu plan -no-color
+      - name: Get ECR repo URL
+        id: ecr
+        run: |
+          REPO_NAME="dte-fetcher-lambda"
+          REPO_URL=$(aws ecr describe-repositories --repository-names "$REPO_NAME" --query repositories[0].repositoryUri --output text)
+          echo "repo_url=$REPO_URL" >> $GITHUB_OUTPUT
 
-      - name: Plan (save)
-        if: github.event_name == 'push'
-        working-directory: infra
-        run: tofu plan -out plan.out -no-color
+      - name: Login to ECR
+        if: github.event_name == push
+        run: |
+          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.ecr.outputs.repo_url }}
 
-      - name: Apply to main
-        if: github.event_name == 'push'
+      - name: Build & Push image
+        if: github.event_name == push
+        run: |
+          IMAGE_TAG=${GITHUB_SHA}
+          docker build -t ${{ steps.ecr.outputs.repo_url }}:$IMAGE_TAG .
+          docker push ${{ steps.ecr.outputs.repo_url }}:$IMAGE_TAG
+          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Plan with image_tag
+        if: github.event_name == push
         working-directory: infra
-        run: tofu apply -auto-approve plan.out
+        run: |
+          tofu plan -var "image_tag=${{ steps.deploy.outputs.image_tag }}" -no-color
+
+      - name: Apply with image_tag
+        if: github.event_name == push
+        working-directory: infra
+        run: |
+          tofu apply -auto-approve -var "image_tag=${{ steps.deploy.outputs.image_tag }}"
+
+      - name: Plan (PR) - read-only
+        if: github.event_name == pull_request
+        working-directory: infra
+        run: |
+          tofu plan -no-color

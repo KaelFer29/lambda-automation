@@ -5,10 +5,6 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
-    archive = {
-      source  = "hashicorp/archive"
-      version = "~> 2.4"
-    }
   }
 }
 
@@ -16,39 +12,25 @@ provider "aws" {
   region = var.aws_region
 }
 
-data "archive_file" "lambda_zip" {
-  type        = "zip"
-  source_dir  = "${path.module}/../src/dte-fetcher"
-  output_path = "${path.module}/build/dte-fetcher.zip"
+# ECR repository for the Lambda container image
+resource "aws_ecr_repository" "repo" {
+  name                 = var.function_name
+  image_tag_mutability = "MUTABLE"
+  force_delete         = true
+
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
 }
 
-resource "aws_iam_role" "lambda_exec" {
-  name = "${var.function_name}-exec"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Action = "sts:AssumeRole",
-      Principal = { Service = "lambda.amazonaws.com" },
-      Effect = "Allow",
-      Sid    = ""
-    }]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "basic" {
-  role       = aws_iam_role.lambda_exec.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" 
-}
-
+# Lambda from container image; created only when image_tag is provided
 resource "aws_lambda_function" "this" {
+  count            = var.image_tag != "" ? 1 : 0
   function_name    = var.function_name
-  role             = aws_iam_role.lambda_exec.arn
-  handler          = "handler.lambda_handler"
-  runtime          = "python3.12"
-  filename         = data.archive_file.lambda_zip.output_path
-  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  publish          = true
+  package_type     = "Image"
+  image_uri        = "${aws_ecr_repository.repo.repository_url}:${var.image_tag}"
   timeout          = 60
+  publish          = true
 
   environment {
     variables = {
