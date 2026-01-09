@@ -7,5 +7,17 @@ variable "aws_region" {
 variable "function_name" {
   description = "Nombre de la función Lambda"
   type        = string
-  default     = "hello-lambda"
+  default     = "dte-fetcher-lambda"
+}
+
+variable "vitacura_dte_user" {
+  description = "Usuario para login en DTE Detail"
+  type        = string
+  default     = ""
+}
+
+variable "vitacura_dte_pass" {
+  description = "Password para login en DTE Detail"
+  type        = string
+  default     = ""
 }

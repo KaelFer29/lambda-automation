@@ -18,8 +18,8 @@ provider "aws" {
 
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_dir  = "${path.module}/../src/hello"
-  output_path = "${path.module}/build/hello.zip"
+  source_dir  = "${path.module}/../src/dte-fetcher"
+  output_path = "${path.module}/build/dte-fetcher.zip"
 }
 
 resource "aws_iam_role" "lambda_exec" {
@@ -37,7 +37,7 @@ resource "aws_iam_role" "lambda_exec" {
 
 resource "aws_iam_role_policy_attachment" "basic" {
   role       = aws_iam_role.lambda_exec.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" 
 }
 
 resource "aws_lambda_function" "this" {
@@ -48,5 +48,12 @@ resource "aws_lambda_function" "this" {
   filename         = data.archive_file.lambda_zip.output_path
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   publish          = true
-  timeout          = 10
+  timeout          = 60
+
+  environment {
+    variables = {
+      VITACURA_DTE_USER = var.vitacura_dte_user
+      VITACURA_DTE_PASS = var.vitacura_dte_pass
+    }
+  }
 }
